@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Embed Host</title>
+<style>
+  :root {
+    --bg: #E9EDF1;
+    --panel: #FFFFFF;
+    --ink: #1C2733;
+    --muted: #5B6B7B;
+    --line: #C9D2DB;
+    --accent: #1F5FA8;
+    --ok: #2E7D4F;
+    --font: "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --code: "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141A21; --panel: #1C242D; --ink: #E4EAF0; --muted: #93A3B3;
+      --line: #2E3A46; --accent: #6FA8E8; --ok: #6CC495;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--font); }
+
+  .app { display: grid; grid-template-columns: minmax(300px, 400px) 1fr; height: 100%; }
+  .side {
+    background: var(--panel); border-right: 1px solid var(--line);
+    padding: 20px; display: flex; flex-direction: column; gap: 14px; overflow: auto;
+  }
+  h1 { font-size: 20px; margin: 0; font-weight: 600; }
+  .hint { color: var(--muted); font-size: 13px; margin: 0; }
+  textarea {
+    width: 100%; min-height: 240px; flex: 1; resize: vertical;
+    font: 13px/1.5 var(--code); color: var(--ink); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 6px; padding: 12px;
+  }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  button {
+    font: 600 14px var(--font); padding: 9px 14px; border-radius: 6px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  label.opt { display: flex; gap: 8px; align-items: center; font-size: 14px; }
+  .status { font-size: 13px; color: var(--muted); min-height: 1.5em; }
+  .status.ok { color: var(--ok); }
+
+  .stage { position: relative; padding: 20px; overflow: hidden; }
+  .host {
+    width: 100%; height: 100%; overflow: auto; display: flex; justify-content: center;
+    align-items: flex-start; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--panel); padding: 16px;
+  }
+  .host iframe { max-width: 100%; }
+  .host.fill { padding: 0; align-items: stretch; }
+  .host.fill > iframe { width: 100%; height: 100%; border: 0; }
+  .empty {
+    position: absolute; inset: 20px; display: grid; place-items: center; text-align: center;
+    color: var(--muted); border: 2px dashed var(--line); border-radius: 8px; padding: 20px;
+  }
+
+  /* Live mode: embed only, full window */
+  body.live .side { display: none; }
+  body.live .app { grid-template-columns: 1fr; }
+  body.live .stage { padding: 0; }
+  body.live .host { border: 0; border-radius: 0; }
+  body.live .empty { inset: 0; }
+  .empty[hidden] { display: none; }
+  .ver { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 6px; }
+
+  @media (max-width: 760px) {
+    .app { grid-template-columns: 1fr; grid-template-rows: auto 70vh; height: auto; }
+    .side { border-right: 0; border-bottom: 1px solid var(--line); }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <h1>Embed Host <span class="ver">v3</span></h1>
+    <p class="hint">Paste any embed code (iframe, script widget, raw HTML) and render it. ⌘ + Enter also renders.</p>
+    <textarea id="code" spellcheck="false" placeholder='&lt;iframe src="https://www.youtube.com/embed/..." width="560" height="315"&gt;&lt;/iframe&gt;'></textarea>
+    <div class="row">
+      <button class="primary" id="render">Render</button>
+      <button id="live">Open live view</button>
+      <button id="copy">Copy live link</button>
+      <button id="clear">Clear</button>
+    </div>
+    <label class="opt"><input type="checkbox" id="watch"> Watch embed.txt in this folder for changes</label>
+    <div class="status" id="status" role="status"></div>
+  </aside>
+  <main class="stage">
+    <div id="frame" class="host"></div>
+    <div class="empty" id="empty">Paste an embed code on the left and press Render.</div>
+  </main>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const code = $('code'), frame = $('frame'), empty = $('empty'), status = $('status');
+  const KEY = 'embed-host:last';
+  let lastFileText = null, watchTimer = null;
+
+  // Unicode-safe base64 for share links
+  const enc = s => btoa(unescape(encodeURIComponent(s)));
+  const dec = s => decodeURIComponent(escape(atob(s)));
+
+  function say(msg, ok = false) { status.textContent = msg; status.className = 'status' + (ok ? ' ok' : ''); }
+
+  function render(html) {
+    frame.innerHTML = '';
+    frame.classList.remove('fill');
+    if (!html.trim()) { empty.hidden = false; return; }
+    empty.hidden = true;
+    frame.innerHTML = html;
+
+    // Give every iframe what players like YouTube need: a referrer + media permissions
+    const iframes = frame.querySelectorAll('iframe');
+    iframes.forEach(f => {
+      f.referrerPolicy = 'strict-origin-when-cross-origin';
+      const allow = new Set((f.getAttribute('allow') || '').split(';').map(s => s.trim()).filter(Boolean));
+      ['autoplay', 'fullscreen', 'encrypted-media', 'picture-in-picture', 'clipboard-write', 'web-share']
+        .forEach(p => allow.add(p));
+      f.setAttribute('allow', [...allow].join('; '));
+      f.allowFullscreen = true;
+      f.removeAttribute('sandbox');
+      f.src = f.src; // reload with the new attributes applied
+    });
+
+    // Scripts inserted via innerHTML don't run, so re-create them
+    frame.querySelectorAll('script').forEach(old => {
+      const s = document.createElement('script');
+      [...old.attributes].forEach(a => s.setAttribute(a.name, a.value));
+      s.textContent = old.textContent;
+      old.replaceWith(s);
+    });
+
+    // In live view, a single iframe fills the window
+    if (document.body.classList.contains('live') && iframes.length === 1 && frame.children.length === 1) {
+      frame.classList.add('fill');
+    }
+    try { localStorage.setItem(KEY, html); } catch (e) {}
+  }
+
+  function doRender() { render(code.value); say(code.value.trim() ? 'Rendered.' : 'Nothing to render.', !!code.value.trim()); }
+
+  function liveUrl() {
+    return location.origin + location.pathname + '#live=' + enc(code.value);
+  }
+
+  // Watch embed.txt (needs the page served over http, not file://)
+  async function pollFile() {
+    try {
+      const res = await fetch('embed.txt?t=' + Date.now(), { cache: 'no-store' });
+      if (!res.ok) throw new Error(res.status);
+      const text = await res.text();
+      if (text !== lastFileText) {
+        lastFileText = text; code.value = text; render(text);
+        say('Loaded embed.txt at ' + new Date().toLocaleTimeString(), true);
+      }
+    } catch (e) {
+      say(location.protocol === 'file:'
+        ? 'Watching needs the local server. See the setup notes.'
+        : 'No embed.txt found next to this page.');
+    }
+  }
+  function setWatch(on) {
+    clearInterval(watchTimer);
+    if (on) { lastFileText = null; pollFile(); watchTimer = setInterval(pollFile, 2000); }
+  }
+
+  $('render').onclick = doRender;
+  $('clear').onclick = () => { code.value = ''; render(''); say('Cleared.'); };
+  $('live').onclick = () => { if (code.value.trim()) window.open(liveUrl(), '_blank'); else say('Paste an embed code first.'); };
+  $('copy').onclick = async () => {
+    if (!code.value.trim()) return say('Paste an embed code first.');
+    try { await navigator.clipboard.writeText(liveUrl()); say('Live link copied.', true); }
+    catch (e) { prompt('Copy this link:', liveUrl()); }
+  };
+  $('watch').onchange = e => setWatch(e.target.checked);
+  code.addEventListener('keydown', e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') doRender(); });
+
+  // Startup: #live=... link, ?watch, or last saved embed
+  const hash = location.hash.match(/^#live=(.+)$/);
+  if (hash) {
+    document.body.classList.add('live');
+    try { code.value = dec(hash[1]); render(code.value); } catch (e) { empty.textContent = 'This live link is broken.'; }
+  } else {
+    if (new URLSearchParams(location.search).has('watch')) { $('watch').checked = true; setWatch(true); }
+    else {
+      let saved = null; try { saved = localStorage.getItem(KEY); } catch (e) {}
+      if (saved) { code.value = saved; render(saved); say('Restored your last embed.'); }
+    }
+  }
+  if (new URLSearchParams(location.search).has('live')) document.body.classList.add('live');
+</script>
+</body>
+</html>
