@@ -3,7 +3,7 @@
 Local web page that renders a pasted embed code (iframe, script widget, raw HTML) and serves it from this Mac. Mainly used to watch live-stream embeds from third-party sites.
 
 ## Files
-- `embed-host.html`: the whole app, a single self-contained file (currently v3, version label in the `<h1>`)
+- `embed-host.html`: the whole app, a single self-contained file (currently v4, version label in the `<h1>`)
 - `README.md`: usage docs
 - `embed.txt`: optional embed source the page can watch; gitignored, never commit it
 
@@ -17,11 +17,13 @@ Must be served over http. Opening via file:// breaks YouTube and most stream emb
 - Live view: `#live=<base64 embed>` in the URL hides the editor; a lone iframe fills the window.
 - `?watch` polls `embed.txt` every 2s; `?live` forces live view.
 - Last embed is saved in localStorage.
+- Click shield: a transparent `.shield` div over the embed (on by default) swallows clicks. Chrome only allows pop-ups right after a user gesture, and gestures on the parent page don't pass down to cross-origin iframes, so the embed can't open pop-ups while it's on. The iframe itself is untouched, so stream sites can't detect it. Turning the shield back on also blurs a focused iframe (key presses count as gestures too). The page has its own Fullscreen button because the embed's is unreachable.
 
 ## History
 - v1: sandboxed srcdoc iframe; stream refused to play.
 - v2: direct rendering + referrer/allow attributes.
 - v3: fixed placeholder overlay (`.empty[hidden]` needed because `display: grid` overrode `hidden`), added version label.
+- v4: click shield + Fullscreen button to stop click-triggered pop-ups.
 
 ## Repo
 GitHub: Prezbo8/embed-code-live (public). Hosted on GitHub Pages from `main`: https://prezbo8.github.io/embed-code-live/embed-host.html. Push updates with `git add -A && git commit -m "..." && git push`.
