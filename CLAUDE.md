@@ -24,7 +24,7 @@ Must be served over http. Opening via file:// breaks YouTube and most stream emb
 - v3: fixed placeholder overlay (`.empty[hidden]` needed because `display: grid` overrode `hidden`), added version label.
 
 ## Repo
-GitHub: Prezbo8/embed-code-live (private). Push updates with `git add -A && git commit -m "..." && git push`.
+GitHub: Prezbo8/embed-code-live (public). Hosted on GitHub Pages from `main`: https://prezbo8.github.io/embed-code-live/embed-host.html. Push updates with `git add -A && git commit -m "..." && git push`.
 
 ## Notes
 - Unsandboxed embeds can open pop-ups and redirects; keep that trade-off in mind with any change.
