@@ -18,7 +18,6 @@ Serve it over http. Opening it via `file://` breaks YouTube and most stream embe
 - **Open live view** / **Copy live link**: opens the embed alone, full window (`#live=<base64 embed>`).
 - **Watch embed.txt**: put an `embed.txt` next to the page and it reloads every 2s when the file changes. `?watch` turns this on at load, and `?live` forces live view.
 - Your last embed is saved in localStorage.
-- **Shield** (top-right of the embed, on by default): an invisible layer over the embed catches your clicks, so the embed never gets the click it needs to open a pop-up. Turn it off to press play or unmute, then turn it back on. Use the page's **Fullscreen** button, since the embed's own one is behind the shield.
 
 ## Note
 

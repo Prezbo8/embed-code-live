@@ -73,15 +73,6 @@
   .empty[hidden] { display: none; }
   .ver { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 6px; }
 
-  /* Click shield: catches clicks so the embed never gets a user gesture to open pop-ups */
-  .screen { position: relative; height: 100%; }
-  .screen:fullscreen { background: var(--bg); }
-  .shield { position: absolute; inset: 0; z-index: 1; }
-  .controls { position: absolute; top: 8px; right: 8px; z-index: 2; display: flex; gap: 6px; }
-  .controls button { padding: 5px 10px; font-size: 12px; opacity: .9; }
-  .controls button[aria-pressed="false"] { background: #B3261E; border-color: #B3261E; color: #fff; }
-  .shield[hidden], .controls[hidden] { display: none; }
-
   @media (max-width: 760px) {
     .app { grid-template-columns: 1fr; grid-template-rows: auto 70vh; height: auto; }
     .side { border-right: 0; border-bottom: 1px solid var(--line); }
@@ -91,8 +82,8 @@
 <body>
 <div class="app">
   <aside class="side">
-    <h1>Embed Host <span class="ver">v4</span></h1>
-    <p class="hint">Paste any embed code (iframe, script widget, raw HTML) and render it. ⌘ + Enter also renders. The shield blocks clicks on the embed so it can't open pop-ups; turn it off briefly to press play or unmute.</p>
+    <h1>Embed Host <span class="ver">v3</span></h1>
+    <p class="hint">Paste any embed code (iframe, script widget, raw HTML) and render it. ⌘ + Enter also renders.</p>
     <textarea id="code" spellcheck="false" placeholder='&lt;iframe src="https://www.youtube.com/embed/..." width="560" height="315"&gt;&lt;/iframe&gt;'></textarea>
     <div class="row">
       <button class="primary" id="render">Render</button>
@@ -104,14 +95,7 @@
     <div class="status" id="status" role="status"></div>
   </aside>
   <main class="stage">
-    <div class="screen" id="screen">
-      <div id="frame" class="host"></div>
-      <div class="shield" id="shield" hidden></div>
-      <div class="controls" id="controls" hidden>
-        <button id="shieldBtn" aria-pressed="true">Shield on</button>
-        <button id="fs">Fullscreen</button>
-      </div>
-    </div>
+    <div id="frame" class="host"></div>
     <div class="empty" id="empty">Paste an embed code on the left and press Render.</div>
   </main>
 </div>
@@ -119,9 +103,7 @@
 <script>
   const $ = id => document.getElementById(id);
   const code = $('code'), frame = $('frame'), empty = $('empty'), status = $('status');
-  const shield = $('shield'), controls = $('controls'), shieldBtn = $('shieldBtn');
   const KEY = 'embed-host:last';
-  let shieldOn = true;
   let lastFileText = null, watchTimer = null;
 
   // Unicode-safe base64 for share links
@@ -133,8 +115,6 @@
   function render(html) {
     frame.innerHTML = '';
     frame.classList.remove('fill');
-    controls.hidden = !html.trim();
-    shield.hidden = !html.trim() || !shieldOn;
     if (!html.trim()) { empty.hidden = false; return; }
     empty.hidden = true;
     frame.innerHTML = html;
@@ -194,18 +174,7 @@
     if (on) { lastFileText = null; pollFile(); watchTimer = setInterval(pollFile, 2000); }
   }
 
-  function setShield(on) {
-    shieldOn = on;
-    shieldBtn.setAttribute('aria-pressed', on);
-    shieldBtn.textContent = on ? 'Shield on' : 'Shield off: clicks reach the stream';
-    shield.hidden = !on || !frame.innerHTML.trim();
-    // Pull keyboard focus out of the embed too, since key presses also count as a user gesture
-    if (on && document.activeElement && document.activeElement.tagName === 'IFRAME') document.activeElement.blur();
-  }
-
   $('render').onclick = doRender;
-  shieldBtn.onclick = () => setShield(!shieldOn);
-  $('fs').onclick = () => document.fullscreenElement ? document.exitFullscreen() : $('screen').requestFullscreen();
   $('clear').onclick = () => { code.value = ''; render(''); say('Cleared.'); };
   $('live').onclick = () => { if (code.value.trim()) window.open(liveUrl(), '_blank'); else say('Paste an embed code first.'); };
   $('copy').onclick = async () => {
